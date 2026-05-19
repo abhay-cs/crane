@@ -2,8 +2,6 @@
 //  TopTagsSection.swift
 //  crane
 //
-//  Dashboard slot for FM-extracted tag chips and availability messaging.
-//
 
 import SwiftUI
 
@@ -28,8 +26,8 @@ struct TopTagsSection: View {
     var body: some View {
         if !drops.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                sectionHeader(
-                    "Top Tags",
+                CraneSectionHeader(
+                    title: "Top Tags",
                     trailing: isTagging && topTags.isEmpty ? "Tagging…" : nil
                 )
 
@@ -47,42 +45,24 @@ struct TopTagsSection: View {
                     TagSkeletonRow()
                 } else {
                     Text("Tags appear on your thoughts after capture.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.tertiary)
+                        .font(CraneFont.ui(12))
+                        .foregroundStyle(Color.craneInkTertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
     }
-
-    private func sectionHeader(_ title: String, trailing: String? = nil) -> some View {
-        HStack {
-            Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .tracking(0.4)
-                .foregroundStyle(.secondary)
-            Spacer()
-            if let trailing {
-                Text(trailing)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.tertiary)
-            }
-        }
-    }
 }
-
-// MARK: - Skeleton chips
 
 private struct TagSkeletonRow: View {
     private let widths: [CGFloat] = [52, 44, 60, 48]
-
     @State private var pulsing = false
 
     var body: some View {
         HStack(spacing: 6) {
             ForEach(Array(widths.enumerated()), id: \.offset) { _, width in
                 Capsule(style: .continuous)
-                    .fill(Color.primary.opacity(pulsing ? 0.08 : 0.04))
+                    .fill(Color.craneInk.opacity(pulsing ? 0.08 : 0.04))
                     .frame(width: width, height: 24)
             }
         }
@@ -95,8 +75,6 @@ private struct TagSkeletonRow: View {
     }
 }
 
-// MARK: - Unavailable banner
-
 private struct AIUnavailableBanner: View {
     let message: String
 
@@ -104,24 +82,22 @@ private struct AIUnavailableBanner: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "sparkles")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Color.craneInkTertiary)
                 .padding(.top, 1)
             Text(message)
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
+                .font(CraneFont.ui(11))
+                .foregroundStyle(Color.craneInkTertiary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.primary.opacity(0.04))
+            RoundedRectangle(cornerRadius: DesignMetrics.controlCornerRadius, style: .continuous)
+                .fill(Color.craneInk.opacity(0.04))
         )
     }
 }
-
-// MARK: - Flow layout
 
 private struct FlowLayout: Layout {
     var spacing: CGFloat = 6
