@@ -2,13 +2,7 @@
 //  ContentView.swift
 //  crane
 //
-//  Created by Abhay Sharma on 2026-05-17.
-//
-//  Root of the floating overlay. Switches between the compact "drop" input
-//  bar (default, ⌘⇧Space) and the history list (⌘H), mirroring the React
-//  App.tsx that the original Tauri app used.
-//
-//  The capture bar is rendered with macOS 26 Liquid Glass.
+//  Root of the floating overlay. Switches between the capture pill and history.
 //
 
 import AppKit
@@ -19,14 +13,6 @@ struct ContentView: View {
     @Environment(OverlayController.self) private var controller
 
     var body: some View {
-        // The underlying NSPanel is fully transparent; whichever subview is
-        // shown supplies its own background (a glass pill for the input,
-        // a glass card for the history list).
-        //
-        // Note: we used to wrap this switch in a `GlassEffectContainer` with
-        // `glassEffectID`s so the bar and the history card morphed into one
-        // another. That rendered a second, larger glass surface behind the
-        // input on macOS 26, so we keep the surfaces independent for now.
         Group {
             switch controller.currentView {
             case .input:
@@ -58,7 +44,6 @@ struct ContentView: View {
 
 // MARK: - DropInputBar
 
-/// Spotlight/Raycast-style capture pill rendered with Liquid Glass.
 private struct DropInputBar: View {
     @Environment(OverlayController.self) private var controller
     @Environment(\.modelContext) private var modelContext
@@ -68,7 +53,8 @@ private struct DropInputBar: View {
     @State private var saving: Bool = false
     @State private var justSaved: Bool = false
     @State private var linkError: String?
-    @FocusState private var inputFocused: Bool
+    @State private var saveFlash = false
+    @FocusState private var captureFocused: Bool
 
     private var leadingSymbol: String {
         if justSaved { return "checkmark" }
@@ -77,75 +63,58 @@ private struct DropInputBar: View {
 
     var body: some View {
         ZStack {
-            HStack(spacing: 14) {
-                Image(systemName: leadingSymbol)
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(justSaved ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
-                    .symbolRenderingMode(.hierarchical)
-                    .frame(width: 22)
-                    .contentTransition(.symbolEffect(.replace))
-                    .symbolEffect(.bounce, value: justSaved)
-
-                TextField(
-                    linkMode ? "Paste a link…" : "Drop your thought…",
-                    text: $text
-                )
-                .focusEffectDisabled()
-                .textFieldStyle(.plain)
-                .font(.system(size: 24, weight: .regular, design: .default))
-                .tracking(-0.2)
-                .foregroundStyle(.primary)
-                .focused($inputFocused)
-                .disableAutocorrection(true)
-                .disabled(saving)
-                .focusEffectDisabled()
-                .onSubmit(submit)
-
-                if linkMode {
-                    Text("LINK")
-                        .font(.system(size: 10, weight: .semibold))
-                        .tracking(0.6)
-                        .foregroundStyle(Color.accentColor)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            Color.accentColor.opacity(0.15),
-                            in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 12) {
+                    Image(systemName: leadingSymbol)
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(
+                            justSaved
+                                ? AnyShapeStyle(CraneColor.accent)
+                                : AnyShapeStyle(linkMode ? CraneColor.link : Color.craneInkSecondary)
                         )
-                        .transition(.scale.combined(with: .opacity))
-                }
+                        .symbolRenderingMode(.hierarchical)
+                        .frame(width: 22)
+                        .contentTransition(.symbolEffect(.replace))
+                        .symbolEffect(.bounce, value: justSaved)
 
-                if let linkError {
-                    LinkValidationHint(message: linkError)
-                } else {
-                    HintChips(linkMode: linkMode)
+                    CaptureMirrorField(
+                        text: $text,
+                        placeholder: linkMode ? "Paste a link…" : "Drop your thought…",
+                        isEnabled: !saving && !justSaved,
+                        isFocused: $captureFocused,
+                        onSubmit: submit
+                    )
+                    .frame(maxWidth: .infinity, minHeight: DesignMetrics.inputRowHeight)
+
+                    CaptureModeSegment(linkMode: $linkMode)
                 }
+                .frame(height: DesignMetrics.inputRowHeight)
+
+                Group {
+                    if let linkError {
+                        LinkValidationHint(message: linkError)
+                    } else {
+                        HintChips(linkMode: linkMode)
+                    }
+                }
+                .frame(height: DesignMetrics.hintRowHeight, alignment: .leading)
             }
-            .padding(.horizontal, 22)
-            .frame(height: 64)
-            // Use the classic translucent material instead of macOS 26's
-            // Liquid Glass `.glassEffect(...)`: Liquid Glass paints a soft
-            // focus halo around any glass surface that contains a focused
-            // text input in the key window (the visible "rectangle behind
-            // the input box" symptom), and there's no public API to opt
-            // out. The regular material gives a very similar translucent
-            // look without that key-state treatment.
-            .background(
-                .regularMaterial,
-                in: RoundedRectangle(cornerRadius: DesignMetrics.surfaceCornerRadius, style: .continuous)
-            )
-            .specularBorder(cornerRadius: DesignMetrics.surfaceCornerRadius)
-            .focusEffectDisabled()
+            .padding(.horizontal, DesignMetrics.inputPillHorizontalPadding)
+            .padding(.vertical, DesignMetrics.inputPillVerticalPadding)
+            .craneOverlayShell()
+            .overlay {
+                RoundedRectangle(cornerRadius: DesignMetrics.surfaceCornerRadius, style: .continuous)
+                    .fill(Color.craneCream.opacity(saveFlash ? 0.12 : 0))
+                    .allowsHitTesting(false)
+            }
             .padding(.horizontal, 12)
             .padding(.top, 12)
 
-            // Hidden buttons capture the same Cmd+L / Cmd+H shortcuts that
-            // the original DropInput.tsx used while the TextField is focused.
             shortcutButtons
         }
-        .onAppear { inputFocused = true }
+        .onAppear { focusCaptureField() }
         .onChange(of: controller.currentView) { _, newValue in
-            if newValue == .input { inputFocused = true }
+            if newValue == .input { focusCaptureField() }
         }
         .onChange(of: controller.inputResetToken) { _, _ in
             resetDraft()
@@ -163,7 +132,6 @@ private struct DropInputBar: View {
             Button("Toggle link mode") { linkMode.toggle() }
                 .keyboardShortcut("l", modifiers: .command)
             Button("Open history") {
-                inputFocused = false
                 controller.currentView = .history
             }
             .keyboardShortcut("h", modifiers: .command)
@@ -209,11 +177,17 @@ private struct DropInputBar: View {
 
         AIJobQueue.shared.enqueue(dropID: drop.id)
 
-        // Brief checkmark blip in the leading-icon slot, then hide. The
-        // 250 ms delay lets the symbol replace + bounce play before the
-        // panel disappears.
         justSaved = true
+        withAnimation(.craneSubtle) { saveFlash = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            withAnimation(.craneSubtle) { saveFlash = false }
+        }
         controller.scheduleAfterSaveDismiss { hideAndReset() }
+    }
+
+    /// Focus after the panel is key; immediate `@FocusState` often misses on overlay open.
+    private func focusCaptureField() {
+        DispatchQueue.main.async { captureFocused = true }
     }
 
     private func hideAndReset() {
@@ -227,6 +201,87 @@ private struct DropInputBar: View {
         saving = false
         justSaved = false
         linkError = nil
+        saveFlash = false
+    }
+}
+
+// MARK: - Capture field (mirror text)
+
+/// Invisible `TextField` captures keys; a SwiftUI `Text` overlay shows ink
+/// reliably (AppKit text in our transparent panel does not paint glyphs).
+private struct CaptureMirrorField: View {
+    @Binding var text: String
+    var placeholder: String
+    var isEnabled: Bool
+    @FocusState.Binding var isFocused: Bool
+    var onSubmit: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        let caretColor = CraneColor.caret(for: colorScheme)
+        ZStack(alignment: .leading) {
+            TextField("", text: $text)
+                .textFieldStyle(.plain)
+                .font(CraneFont.display(26))
+                .tracking(-0.2)
+                .foregroundStyle(Color.clear)
+                .tint(caretColor)
+                .focused($isFocused)
+                .disabled(!isEnabled)
+                .onSubmit(onSubmit)
+                .accessibilityLabel(placeholder)
+
+            if text.isEmpty {
+                Text(placeholder)
+                    .font(CraneFont.display(26))
+                    .tracking(-0.2)
+                    .foregroundStyle(Color.craneInkTertiary)
+                    .allowsHitTesting(false)
+            } else {
+                Text(text)
+                    .font(CraneFont.display(26))
+                    .tracking(-0.2)
+                    .foregroundStyle(Color.craneInk)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+}
+
+// MARK: - Mode segment
+
+private struct CaptureModeSegment: View {
+    @Binding var linkMode: Bool
+
+    var body: some View {
+        HStack(spacing: 2) {
+            segment("Thought", selected: !linkMode) { linkMode = false }
+            segment("Link", selected: linkMode) { linkMode = true }
+        }
+        .padding(3)
+        .background(Color.craneCream.opacity(0.12), in: Capsule(style: .continuous))
+        .fixedSize()
+    }
+
+    private func segment(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(CraneFont.ui(10, weight: .medium))
+                .tracking(0.3)
+                .foregroundStyle(selected ? CraneColor.cream : Color.craneInkTertiary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background {
+                    if selected {
+                        Capsule(style: .continuous)
+                            .fill(CraneColor.accent)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
@@ -244,14 +299,13 @@ private struct LinkValidationHint: View {
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .font(.system(size: 12, weight: .medium))
-        .foregroundStyle(.orange)
-        .frame(maxWidth: 200, alignment: .leading)
+        .font(CraneFont.ui(11, weight: .medium))
+        .foregroundStyle(Color.craneWarning)
         .accessibilityLabel(message)
     }
 }
 
-// MARK: - Hint chips ("↵ save · esc dismiss · ⌘H history")
+// MARK: - Hint chips
 
 private struct HintChips: View {
     let linkMode: Bool
@@ -260,29 +314,16 @@ private struct HintChips: View {
         HStack(spacing: 6) {
             HintKey("↵")
             Text("save")
-                .foregroundStyle(.tertiary)
-
-            if linkMode {
-                HintKey("⌘L")
-                Text("thought")
-                    .foregroundStyle(.tertiary)
-            } else {
-                HintKey("⌘L")
-                Text("link")
-                    .foregroundStyle(.tertiary)
-            }
-
+            HintKey("⌘L")
+            Text(linkMode ? "thought" : "link")
             HintKey("esc")
             Text("dismiss")
-                .foregroundStyle(.tertiary)
-
             HintKey("⌘H")
             Text("history")
-                .foregroundStyle(.tertiary)
         }
-        .font(.system(size: 12, weight: .regular))
+        .font(CraneFont.mono(11))
+        .foregroundStyle(Color.craneInkTertiary)
         .lineLimit(1)
-        .fixedSize()
     }
 }
 
@@ -292,22 +333,13 @@ private struct HintKey: View {
 
     var body: some View {
         Text(label)
-            .font(.system(size: 10, weight: .medium))
-            .foregroundStyle(.secondary)
+            .font(CraneFont.mono(10, weight: .medium))
+            .foregroundStyle(Color.craneInkSecondary)
             .padding(.horizontal, 5)
-            .padding(.vertical, 1)
-            .background(
-                .quaternary.opacity(0.6),
-                in: RoundedRectangle(cornerRadius: 4, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .strokeBorder(.quaternary, lineWidth: 0.5)
-            )
+            .padding(.vertical, 2)
+            .craneInputRecess(cornerRadius: DesignMetrics.xs + 2)
     }
 }
-
-// MARK: - Preview
 
 #Preview("Input bar") {
     let controller = OverlayController()

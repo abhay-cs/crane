@@ -2,12 +2,11 @@
 //  EmptyStateView.swift
 //  crane
 //
-//  Shared empty-state pattern: short message plus a primary action.
-//
 
 import SwiftUI
 
 struct EmptyStateView: View {
+    var symbol: String = "tray"
     let message: String
     var primaryTitle: String = "Capture drop"
     var primaryAction: (() -> Void)?
@@ -15,23 +14,25 @@ struct EmptyStateView: View {
     var secondaryAction: (() -> Void)?
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 14) {
+            Image(systemName: symbol)
+                .font(.system(size: 28, weight: .light))
+                .foregroundStyle(Color.craneInkTertiary)
+                .symbolRenderingMode(.hierarchical)
+
             Text(message)
-                .font(.system(size: 13))
-                .foregroundStyle(.tertiary)
+                .font(CraneFont.ui(13))
+                .foregroundStyle(Color.craneInkTertiary)
                 .multilineTextAlignment(.center)
 
             if let primaryAction {
                 Button(primaryTitle, action: primaryAction)
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+                    .buttonStyle(.cranePrimary)
             }
 
             if let secondaryTitle, let secondaryAction {
                 Button(secondaryTitle, action: secondaryAction)
-                    .buttonStyle(.borderless)
-                    .controlSize(.small)
-                    .foregroundStyle(.secondary)
+                    .buttonStyle(.craneSecondary)
             }
         }
         .padding(.vertical, 12)

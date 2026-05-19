@@ -2,8 +2,6 @@
 //  TagChip.swift
 //  crane
 //
-//  Small pill for FM-extracted tags on the dashboard and in history rows.
-//
 
 import SwiftUI
 
@@ -20,10 +18,8 @@ struct TagChip: View {
     var body: some View {
         Group {
             if let action {
-                Button(action: action) {
-                    chipLabel
-                }
-                .buttonStyle(.plain)
+                Button(action: action) { chipLabel }
+                    .buttonStyle(.plain)
             } else {
                 chipLabel
             }
@@ -32,14 +28,14 @@ struct TagChip: View {
 
     private var chipLabel: some View {
         Text(label)
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(style == .dashboard ? Color.accentColor : .secondary)
+            .font(CraneFont.ui(11, weight: .medium))
+            .foregroundStyle(style == .dashboard ? CraneColor.accent : Color.craneInkSecondary)
             .padding(.horizontal, style == .dashboard ? 8 : 6)
             .padding(.vertical, style == .dashboard ? 4 : 2)
             .background(
-                (style == .dashboard
-                    ? Color.accentColor.opacity(0.12)
-                    : Color.primary.opacity(0.06)),
+                style == .dashboard
+                    ? AnyShapeStyle(Color.craneCream.opacity(0.14))
+                    : AnyShapeStyle(Color.craneInk.opacity(0.06)),
                 in: Capsule(style: .continuous)
             )
             .lineLimit(1)
