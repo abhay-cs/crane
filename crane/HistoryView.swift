@@ -10,13 +10,17 @@ struct HistoryView: View {
     @Environment(OverlayController.self) private var controller
     @Environment(\.modelContext) private var modelContext
 
-    @Query(sort: \Drop.timestamp, order: .reverse)
-    private var drops: [Drop]
+    @Query private var drops: [Drop]
 
     @State private var search: String = ""
     @State private var debouncedSearch: String = ""
     @State private var searchDebounceTask: Task<Void, Never>?
+    @State private var storeTotalCount = 0
     @FocusState private var searchFocused: Bool
+
+    private var isListCapped: Bool {
+        storeTotalCount > Persistence.maxFetchedDrops
+    }
 
     private var isSearching: Bool {
         !debouncedSearch.trimmingCharacters(in: .whitespaces).isEmpty
@@ -29,7 +33,16 @@ struct HistoryView: View {
             drop.text.lowercased().contains(q)
                 || drop.dropType.rawValue.lowercased().contains(q)
                 || drop.tags.contains { $0.lowercased().contains(q) }
+                || (drop.sourceApp?.lowercased().contains(q) ?? false)
         }
+    }
+
+    init() {
+        var descriptor = FetchDescriptor<Drop>(
+            sortBy: [SortDescriptor(\Drop.timestamp, order: .reverse)]
+        )
+        descriptor.fetchLimit = Persistence.maxFetchedDrops
+        _drops = Query(descriptor)
     }
 
     var body: some View {
@@ -54,7 +67,9 @@ struct HistoryView: View {
                 debouncedSearch = seed
             }
             searchFocused = true
+            refreshStoreTotalCount()
         }
+        .onChange(of: drops.count) { _, _ in refreshStoreTotalCount() }
         .onChange(of: search) { _, newValue in
             searchDebounceTask?.cancel()
             searchDebounceTask = Task {
@@ -83,7 +98,7 @@ struct HistoryView: View {
                 .tracking(-0.2)
                 .foregroundStyle(Color.craneInk)
 
-            Text("\(drops.count)")
+            Text("\(storeTotalCount)")
                 .font(CraneFont.ui(11, weight: .medium))
                 .foregroundStyle(Color.craneInkSecondary)
                 .padding(.horizontal, 8)
@@ -115,7 +130,7 @@ struct HistoryView: View {
                     .tint(CraneColor.accent)
                     .disableAutocorrection(true)
                     .accessibilityLabel("Search drops")
-                    .accessibilityHint("Filters by text, type, or tags")
+                    .accessibilityHint("Filters by text, type, tags, or source app")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -187,12 +202,20 @@ struct HistoryView: View {
                                 }
                             }
                         }
+
+                        if isListCapped {
+                            Text(cappedListMessage)
+                                .font(CraneFont.ui(11))
+                                .foregroundStyle(Color.craneInkTertiary)
+                                .padding(.top, 8)
+                                .padding(.horizontal, 4)
+                        }
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                 }
                 .onAppear { scrollToFocusedDrop(in: items, proxy: proxy) }
-                .onChange(of: controller.scrollToDropID) { _, _ in
+                .onChange(of: controller.scrollToken) { _, _ in
                     scrollToFocusedDrop(in: items, proxy: proxy)
                 }
                 .onChange(of: items.count) { _, _ in
@@ -202,18 +225,26 @@ struct HistoryView: View {
         }
     }
 
+    private var cappedListMessage: String {
+        let limit = Persistence.maxFetchedDrops
+        if isSearching {
+            return "Search covers your newest \(limit) drops."
+        }
+        return "Showing your newest \(limit) drops."
+    }
+
+    private func refreshStoreTotalCount() {
+        storeTotalCount = (try? modelContext.fetchCount(FetchDescriptor<Drop>())) ?? drops.count
+    }
+
     private func goBack() {
         controller.currentView = .input
     }
 
     private func delete(_ drop: Drop) {
         withAnimation(.easeOut(duration: 0.15)) {
-            modelContext.delete(drop)
-            do {
-                try modelContext.save()
-            } catch {
-                CraneAlert.presentSaveFailed(error)
-            }
+            modelContext.deleteDrop(drop)
+            refreshStoreTotalCount()
         }
     }
 
