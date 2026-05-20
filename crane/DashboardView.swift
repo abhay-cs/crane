@@ -10,8 +10,18 @@ import Charts
 struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
 
-    @Query(sort: \Drop.timestamp, order: .reverse)
-    private var drops: [Drop]
+    /// Newest drops for recent list and row actions (capped).
+    @Query private var recentDrops: [Drop]
+
+    @State private var stats: DropStatistics = .empty
+
+    init() {
+        var descriptor = FetchDescriptor<Drop>(
+            sortBy: [SortDescriptor(\Drop.timestamp, order: .reverse)]
+        )
+        descriptor.fetchLimit = Persistence.maxFetchedDrops
+        _recentDrops = Query(descriptor)
+    }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -19,7 +29,11 @@ struct DashboardView: View {
                 header
                 statCards
                 activitySection
-                TopTagsSection(drops: drops) { tag in
+                TopTagsSection(
+                    topTags: stats.topTags,
+                    hasAnyDrops: stats.totalCount > 0,
+                    untaggedInSample: recentDrops.untaggedCount
+                ) { tag in
                     openOverlayHistory(search: tag)
                 }
                 recentSection
@@ -28,6 +42,12 @@ struct DashboardView: View {
             .padding(DesignMetrics.md)
         }
         .frame(width: 380, height: 520, alignment: .topLeading)
+        .onAppear(perform: refreshStatistics)
+        .onChange(of: recentDrops.count) { _, _ in refreshStatistics() }
+    }
+
+    private func refreshStatistics() {
+        stats = DropStatistics.compute(in: modelContext)
     }
 
     private var header: some View {
@@ -62,18 +82,22 @@ struct DashboardView: View {
 
     private var statCards: some View {
         HStack(spacing: 10) {
-            StatCard(value: "\(drops.count)", label: "TOTAL")
-            StatCard(value: "\(drops.todayCount)", label: "TODAY")
-            StatCard(value: "\(drops.streakDays)d", label: "STREAK")
+            StatCard(value: "\(stats.totalCount)", label: "TOTAL")
+            StatCard(value: "\(stats.todayCount)", label: "TODAY")
+            StatCard(
+                value: "\(stats.streakDays)d",
+                label: "STREAK",
+                subtitle: stats.hasDropToday ? nil : "last active day"
+            )
         }
         .frame(height: 80)
     }
 
     private var activitySection: some View {
-        let breakdown = drops.typeBreakdown
+        let breakdown = stats.typeBreakdown
         return VStack(alignment: .leading, spacing: 8) {
             CraneSectionHeader(title: "Activity", trailing: "14 days")
-            ActivityChart(points: drops.dailyCounts(days: 14))
+            ActivityChart(points: stats.dailyCounts)
                 .frame(height: 56)
             TypeBreakdownBar(thoughts: breakdown.thoughts, links: breakdown.links)
                 .frame(height: 6)
@@ -89,10 +113,10 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: 4) {
             CraneSectionHeader(
                 title: "Recent",
-                trailingActionTitle: drops.isEmpty ? nil : "Open all",
-                trailingAction: drops.isEmpty ? nil : { openOverlayHistory(focusing: nil) }
+                trailingActionTitle: recentDrops.isEmpty ? nil : "Open all",
+                trailingAction: recentDrops.isEmpty ? nil : { openOverlayHistory(focusing: nil) }
             )
-            let items = Array(drops.prefix(3))
+            let items = Array(recentDrops.prefix(3))
             if items.isEmpty {
                 EmptyStateView(
                     symbol: "tray",
@@ -126,12 +150,8 @@ struct DashboardView: View {
 
     private func delete(_ drop: Drop) {
         withAnimation(.easeOut(duration: 0.15)) {
-            modelContext.delete(drop)
-            do {
-                try modelContext.save()
-            } catch {
-                CraneAlert.presentSaveFailed(error)
-            }
+            modelContext.deleteDrop(drop)
+            refreshStatistics()
         }
     }
 
@@ -143,6 +163,7 @@ struct DashboardView: View {
 private struct StatCard: View {
     let value: String
     let label: String
+    var subtitle: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -155,13 +176,26 @@ private struct StatCard: View {
                 .font(CraneFont.ui(10, weight: .medium))
                 .tracking(0.6)
                 .foregroundStyle(Color.craneInkTertiary)
+            if let subtitle {
+                Text(subtitle)
+                    .font(CraneFont.ui(9, weight: .medium))
+                    .foregroundStyle(Color.craneInkTertiary.opacity(0.85))
+                    .lineLimit(1)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .craneCard()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(label), \(value)")
+        .accessibilityLabel(accessibilityText)
+    }
+
+    private var accessibilityText: String {
+        if let subtitle {
+            return "\(label), \(value), \(subtitle)"
+        }
+        return "\(label), \(value)"
     }
 }
 

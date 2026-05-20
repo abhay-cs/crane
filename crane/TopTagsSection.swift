@@ -6,7 +6,9 @@
 import SwiftUI
 
 struct TopTagsSection: View {
-    let drops: [Drop]
+    let topTags: [(tag: String, count: Int)]
+    let hasAnyDrops: Bool
+    let untaggedInSample: Int
     let onTagSelected: (String) -> Void
 
     private var queue: AIJobQueue { AIJobQueue.shared }
@@ -15,16 +17,15 @@ struct TopTagsSection: View {
         FoundationModelsService.shared.tagAvailability
     }
 
-    private var topTags: [(tag: String, count: Int)] {
-        drops.topTags(limit: 8)
-    }
-
     private var isTagging: Bool {
-        queue.isActive || drops.untaggedCount > 0
+        if case .available = availability {
+            return queue.isActive || untaggedInSample > 0
+        }
+        return false
     }
 
     var body: some View {
-        if !drops.isEmpty {
+        if hasAnyDrops {
             VStack(alignment: .leading, spacing: 8) {
                 CraneSectionHeader(
                     title: "Top Tags",
