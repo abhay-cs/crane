@@ -48,7 +48,38 @@ Menu bar → **Capture** has the same actions, plus **Reset All Data…**
 
 ---
 
-## Run it
+## Install
+
+**Needs:** macOS 26.4+ (Tahoe), Apple Silicon.
+
+1. Grab the latest `crane-*.dmg` from [Releases](https://github.com/abhay-cs/crane/releases).
+2. Open the DMG, drag **crane.app** into **Applications**.
+3. Launch it from **Applications**. macOS will block it — see below.
+
+### About the Gatekeeper warning
+
+This build isn't notarized because that requires a paid Apple Developer
+account ($99/year), which this project doesn't have. The app is still
+**signed** (so macOS can verify it hasn't been tampered with since release)
+— just not notarized by Apple. Everything else is unchanged: same code,
+same [source](.), same App Sandbox, no network access.
+
+The first time you open it, macOS will refuse with *"crane can't be opened
+because Apple cannot check it for malicious software"*. To open it anyway:
+
+- **Right-click (or Control-click) `crane.app` → Open → Open**, in the
+  dialog that appears — this only needs to be done once.
+- If that doesn't show an Open button, go to
+  **System Settings → Privacy & Security**, scroll to the Security section,
+  and click **Open Anyway** next to the crane message, then confirm.
+
+If you'd rather build it yourself instead of trusting a downloaded binary,
+see [Build from source](#build-from-source) below — building locally with
+Xcode sidesteps Gatekeeper entirely since you're the one compiling it.
+
+---
+
+## Build from source
 
 **Needs:** macOS 26.4+ and Xcode 26+
 
@@ -59,6 +90,9 @@ open crane.xcodeproj
 ```
 
 Press **⌘R** in Xcode.
+
+To produce your own installable DMG (ad-hoc signed, same as the Releases
+build): `scripts/make-release.sh` → writes `dist/crane-<version>.dmg`.
 
 ---
 
