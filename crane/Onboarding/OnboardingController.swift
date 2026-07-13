@@ -45,9 +45,9 @@ final class OnboardingController {
     /// margin on every side, same as the overlay.
     static let cardSize = NSSize(width: 460, height: 176)
     private static let shadowMargin = DesignMetrics.glassShadowMargin
-    static let panelSize = NSSize(
-        width: cardSize.width + shadowMargin * 2,
-        height: cardSize.height + shadowMargin * 2
+    static let panelSize = GlassPanelGeometry.panelSize(
+        forGlass: cardSize,
+        margin: shadowMargin
     )
     /// Gap between the card and the bottom of the visible screen area.
     private static let bottomInset: CGFloat = 48
@@ -166,6 +166,9 @@ final class OnboardingController {
         panel.animationBehavior = .utilityWindow
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
+        // Pinned per-panel so the glass keeps one smoky tint in any system
+        // appearance, without tinting the menu-bar status item.
+        panel.appearance = NSAppearance(named: .darkAqua)
 
         // Fix the SwiftUI ideal size: the hosting view's Auto Layout constraints
         // drive the panel frame, and a fully flexible root balloons the window.

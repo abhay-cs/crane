@@ -10,6 +10,7 @@ import SwiftData
 struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(DashboardController.self) private var dashboardController
 
     /// Newest drops for recent list and row actions (capped).
     @Query private var recentDrops: [Drop]
@@ -55,24 +56,22 @@ struct DashboardView: View {
 
             footer
         }
+        // The glass rect. `CraneGlassHost` adds the shadow gutter around it and
+        // `NSGlassEffectView` draws the surface, exactly as for the capture bar —
+        // so this root stays transparent and only contributes the specular edge.
         .frame(
             width: DesignMetrics.dashboardWidth,
             height: DesignMetrics.dashboardHeight
         )
-        .padding(DesignMetrics.glassShadowMargin)
-        .frame(
-            width: DesignMetrics.dashboardWindowWidth,
-            height: DesignMetrics.dashboardWindowHeight,
-            alignment: .topLeading
-        )
-        .fixedSize(horizontal: true, vertical: true)
-        .craneDashboardBackground()
-        .presentationBackground(.clear)
-        .containerBackground(.clear, for: .window)
+        .craneOverlayShell()
         .environment(\.colorScheme, .dark)
         .preferredColorScheme(.dark)
         .onAppear(perform: refreshStatistics)
         .onChange(of: recentDrops.count) { _, _ in refreshStatistics() }
+        // The panel builds this view once and then only orders it in and out, so
+        // `onAppear` fires a single time. Recompute on each open or the streak and
+        // today's count would freeze at their first-open values.
+        .onChange(of: dashboardController.showToken) { _, _ in refreshStatistics() }
     }
 
     // MARK: - Data
@@ -330,7 +329,9 @@ struct DashboardView: View {
     }
 
     private func openOverlayHistory(focusing dropID: UUID? = nil, search: String? = nil) {
-        // Defer until after MenuBarExtra finishes its open/close layout pass.
+        // Opening the overlay hides the dashboard, which tears this view's own
+        // window out from under the click that triggered it. Defer past the
+        // current event to keep that out of AppKit's mouse-tracking.
         DispatchQueue.main.async {
             AppDelegate.shared?.showOverlayHistory(focusing: dropID, search: search)
         }
@@ -648,5 +649,6 @@ private struct RecentEmptyState: View {
 
 #Preview("Dashboard") {
     DashboardView()
+        .environment(DashboardController())
         .modelContainer(for: Drop.self, inMemory: true)
 }

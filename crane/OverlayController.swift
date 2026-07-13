@@ -26,13 +26,19 @@ final class OverlayController {
     /// margin on every side, so the Liquid Glass drop shadow follows the rounded
     /// shape instead of being clipped into a rectangle.
     private static let shadowMargin = DesignMetrics.overlayShadowMargin
-    static let inputSize = NSSize(
-        width: DesignMetrics.overlayGlassWidth + shadowMargin * 2,
-        height: DesignMetrics.captureGlassHeight + shadowMargin * 2
+    static let inputSize = GlassPanelGeometry.panelSize(
+        forGlass: NSSize(
+            width: DesignMetrics.overlayGlassWidth,
+            height: DesignMetrics.captureGlassHeight
+        ),
+        margin: shadowMargin
     )
-    static let historySize = NSSize(
-        width: DesignMetrics.overlayGlassWidth + shadowMargin * 2,
-        height: DesignMetrics.historyGlassHeight + shadowMargin * 2
+    static let historySize = GlassPanelGeometry.panelSize(
+        forGlass: NSSize(
+            width: DesignMetrics.overlayGlassWidth,
+            height: DesignMetrics.historyGlassHeight
+        ),
+        margin: shadowMargin
     )
 
     /// Currently displayed view. Mutating this animates the panel resize.
@@ -62,6 +68,10 @@ final class OverlayController {
     private var scrollHighlightClearTask: Task<Void, Never>?
 
     private static let screenMargin: CGFloat = 16
+
+    /// Floor for `clampFrame` on a very small display — the panel may shrink,
+    /// but never past a usable capture pill.
+    private static let minimumPanelSize = NSSize(width: 200, height: inputSize.height)
 
     private let panel: OverlayPanel
     private var hostingView: NSHostingView<AnyView>?
@@ -251,21 +261,12 @@ final class OverlayController {
 
     /// Keeps the panel fully inside the active display's visible area.
     private func clampFrame(_ frame: NSRect, to visible: NSRect) -> NSRect {
-        let margin = Self.screenMargin
-        var f = frame
-        let maxW = max(200, visible.width - margin * 2)
-        let maxH = max(Self.inputSize.height, visible.height - margin * 2)
-        f.size.width = min(f.width, maxW)
-        f.size.height = min(f.height, maxH)
-        f.origin.x = min(
-            max(f.origin.x, visible.minX + margin),
-            visible.maxX - f.width - margin
+        GlassPanelGeometry.clamp(
+            frame,
+            to: visible,
+            margin: Self.screenMargin,
+            minSize: Self.minimumPanelSize
         )
-        f.origin.y = min(
-            max(f.origin.y, visible.minY + margin),
-            visible.maxY - f.height - margin
-        )
-        return f
     }
 
     private func captureSourceApp() {
