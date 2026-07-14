@@ -48,6 +48,29 @@ Menu bar → **Capture** has the same actions, plus **Reset All Data…**
 
 ---
 
+## Automatic tags — on your Mac, not in the cloud
+
+crane reads each thought you save and tags it with a topic or two, so you can
+find things later without having remembered to file them.
+
+That tagging runs **entirely on-device**, through Apple Intelligence's
+[Foundation Models](https://developer.apple.com/documentation/foundationmodels).
+Your thoughts are never sent anywhere — crane makes **no network requests at
+all**, and there is no API key, no account, and no server. The model already
+lives in macOS; crane just asks it a question.
+
+- Tags appear on entries in **history**, and the common ones in **Topics** on
+  the dashboard. Click a tag to search for it.
+- Tagging happens **after** the save, in the background. It never slows down
+  capture — press Enter and the bar is gone, tagged or not.
+- **No Apple Intelligence?** Everything else works exactly the same. crane just
+  says so on the dashboard and skips the tags.
+
+Needs Apple Intelligence turned on (**System Settings → Apple Intelligence &
+Siri**) on a Mac that supports it.
+
+---
+
 ## Install
 
 **Needs:** macOS 26.4+ (Tahoe), Apple Silicon.
