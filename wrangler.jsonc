@@ -1,0 +1,10 @@
+{
+  // Serves the static landing page at crane.byabhay.com.
+  // The `name` MUST match the existing Worker so Workers Builds (Git CI/CD)
+  // deploys to the same Worker that owns the crane.byabhay.com custom domain.
+  "name": "round-bar-f1a5",
+  "compatibility_date": "2026-07-11",
+  "assets": {
+    "directory": "./landing"
+  }
+}
