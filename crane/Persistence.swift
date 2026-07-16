@@ -4,10 +4,10 @@
 //
 //  Owns the single shared `ModelContainer` for the app and runs a one-time
 //  migration from the legacy `drops.json` JSON store the first time a
-//  SwiftData container comes up empty. Both the `MenuBarExtra` dashboard
-//  and the floating overlay panel point at the same container, so writes
-//  in the input bar surface live in the dashboard immediately via
-//  `@Query` observation.
+//  SwiftData container comes up empty. Both the menu-bar dashboard panel and
+//  the floating overlay panel point at the same container, so writes in the
+//  input bar surface live in the dashboard immediately via `@Query`
+//  observation.
 //
 
 import Foundation
@@ -23,7 +23,7 @@ enum Persistence {
 
     /// Lazily-built container shared by every surface in the app. Built
     /// once on first access (which is the main actor in practice, since
-    /// both the `MenuBarExtra` scene and `OverlayController.attach` run
+    /// both `DashboardController.attach` and `OverlayController.attach` run
     /// on the main actor) and reused for the process lifetime.
     static let container: ModelContainer = makeContainer()
 

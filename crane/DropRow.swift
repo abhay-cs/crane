@@ -13,7 +13,8 @@ struct DropRow: View {
 
     let drop: Drop
     var style: Style = .standard
-    /// Menu-bar dashboard: inline confirm avoids SwiftUI alerts closing `MenuBarExtra`.
+    /// Menu-bar dashboard: inline confirm keeps the interaction inside the card,
+    /// instead of a modal alert over the panel.
     var inlineDeleteConfirmation: Bool = false
     var isEmphasized: Bool = false
     var onActivate: (() -> Void)? = nil

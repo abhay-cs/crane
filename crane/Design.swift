@@ -82,7 +82,8 @@ enum DesignMetrics {
     /// Transparent breathing room around glass so drop shadows follow the rounded shape.
     static let glassShadowMargin: CGFloat = 30
 
-    /// Visible dashboard content (stat cards, scroll, footer).
+    /// Dashboard *panel* size: the visible card plus the shadow gutter on every
+    /// side. Consumed by `DashboardController.panelSize`.
     static var dashboardWindowWidth: CGFloat { dashboardWidth + glassShadowMargin * 2 }
     static var dashboardWindowHeight: CGFloat { dashboardHeight + glassShadowMargin * 2 }
 
@@ -107,24 +108,6 @@ extension EnvironmentValues {
     var craneColorScheme: ColorScheme {
         get { self[CraneColorSchemeKey.self] }
         set { self[CraneColorSchemeKey.self] = newValue }
-    }
-}
-
-// MARK: - Liquid Glass
-
-enum CraneGlass {
-    static func shape(cornerRadius: CGFloat) -> RoundedRectangle {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-    }
-
-    /// Primary floating controls (capture pill, history shell).
-    static var interactive: Glass {
-        .regular.interactive()
-    }
-
-    /// Static shells (menu-bar dashboard).
-    static var regular: Glass {
-        .regular
     }
 }
 
@@ -178,10 +161,10 @@ private struct CraneCardSurfaceModifier: ViewModifier {
 }
 
 extension View {
-    /// Primary overlay shell (input bar, history card). The Liquid Glass surface is
-    /// rendered by the AppKit `NSGlassEffectView` that hosts the overlay, so this
-    /// keeps content transparent above it and adds the specular edge for depth parity
-    /// with the menu-bar dashboard.
+    /// The shell for every crane surface: input bar, history card, onboarding card,
+    /// menu-bar dashboard. The Liquid Glass itself is rendered by the AppKit
+    /// `NSGlassEffectView` hosting the panel (`CraneGlassHost`), so this keeps the
+    /// content transparent above it and contributes only the specular edge.
     func craneOverlayShell(cornerRadius: CGFloat = DesignMetrics.surfaceCornerRadius) -> some View {
         background(Color.clear)
             .specularBorder(cornerRadius: cornerRadius)
@@ -225,18 +208,6 @@ extension View {
         }
     }
 
-    /// Menu-bar dashboard shell. SwiftUI Liquid Glass on the system MenuBarExtra window.
-    func craneDashboardBackground() -> some View {
-        background {
-            CraneGlass.shape(cornerRadius: DesignMetrics.surfaceCornerRadius)
-                .fill(.clear)
-        }
-        .glassEffect(
-            CraneGlass.regular,
-            in: CraneGlass.shape(cornerRadius: DesignMetrics.surfaceCornerRadius)
-        )
-        .specularBorder(cornerRadius: DesignMetrics.surfaceCornerRadius)
-    }
 }
 
 private struct CraneRowHighlightModifier: ViewModifier {

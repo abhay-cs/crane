@@ -18,9 +18,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private(set) lazy var overlay: OverlayController = OverlayController()
     private(set) lazy var onboarding: OnboardingController = OnboardingController()
+    private(set) lazy var dashboard: DashboardController = DashboardController()
     private let hotkey = GlobalHotkey()
     private var wakeObserver: NSObjectProtocol?
     private var hotkeyRegisteredSuccessfully = false
+    /// Strong reference required — the status item disappears if it is released.
+    private var statusItem: NSStatusItem?
 
     // MARK: - NSApplicationDelegate
 
@@ -54,13 +57,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Self.shared = self
 
         NSApp.setActivationPolicy(.accessory)
-        // Pin the whole app (overlay panel + menu-bar dashboard) to dark so the
-        // Liquid Glass surfaces render the same smoky tint regardless of the
-        // user's system appearance. Without this the MenuBarExtra window adopts
-        // the system (often light) appearance and its glass looks washed out.
-        NSApp.appearance = NSAppearance(named: .darkAqua)
+        // Each glass panel pins itself to dark (see `DashboardPanel.init`) so the
+        // Liquid Glass surfaces keep one smoky tint regardless of system
+        // appearance. Pinning `NSApp.appearance` app-wide instead would also tint
+        // the status-item button, which can render the template icon invisible in
+        // a light menu bar.
 
+        installStatusItem()
         overlay.attach(rootView: ContentView())
+        dashboard.attach()
 
         let hotkeyOK = registerHotkey()
         hotkeyRegisteredSuccessfully = hotkeyOK
@@ -104,6 +109,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let wakeObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
         }
+        // Also tears down the dashboard's click monitors.
+        dashboard.hide()
         AITaggingCoordinator.shared.stopObserving()
         hotkey.unregister()
         SingleInstance.releaseLock()
@@ -112,6 +119,72 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }
+
+    // MARK: - Status item
+
+    /// crane owns its menu-bar item directly rather than through `MenuBarExtra`,
+    /// so the dashboard can hang from an app-owned transparent panel and render
+    /// real Liquid Glass. Left click toggles the dashboard; right click opens the
+    /// actions menu.
+    private func installStatusItem() {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+
+        if let button = item.button {
+            let icon = NSImage(named: "MenuBarIcon")
+            icon?.isTemplate = true
+            icon?.size = NSSize(width: 18, height: 18)
+            button.image = icon
+            button.imagePosition = .imageOnly
+            button.toolTip = "crane — ⌘⇧Space to write"
+            button.setAccessibilityLabel("crane")
+            button.target = self
+            button.action = #selector(statusItemClicked(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        }
+
+        statusItem = item
+        dashboard.statusItemButton = item.button
+    }
+
+    @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
+        let event = NSApp.currentEvent
+        let isSecondaryClick = event?.type == .rightMouseUp
+            || event?.modifierFlags.contains(.control) == true
+
+        if isSecondaryClick {
+            showStatusMenu(from: sender)
+        } else {
+            dashboard.toggle()
+        }
+    }
+
+    /// The actions that have no other entry point. Everything else is reachable
+    /// from the dashboard footer or a shortcut inside the overlay.
+    private func showStatusMenu(from button: NSStatusBarButton) {
+        dashboard.hide()
+
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Write…", action: #selector(menuWrite), keyEquivalent: "")
+        menu.addItem(withTitle: "Open History", action: #selector(menuOpenHistory), keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Welcome Tour", action: #selector(menuWelcomeTour), keyEquivalent: "")
+        menu.addItem(withTitle: "Reset All Data…", action: #selector(menuResetAllData), keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit crane", action: #selector(menuQuit), keyEquivalent: "q")
+        menu.items.forEach { $0.target = self }
+
+        menu.popUp(
+            positioning: nil,
+            at: NSPoint(x: 0, y: button.bounds.minY - 4),
+            in: button
+        )
+    }
+
+    @objc private func menuWrite() { showOverlay() }
+    @objc private func menuOpenHistory() { showOverlayHistory() }
+    @objc private func menuWelcomeTour() { showWelcomeTour() }
+    @objc private func menuResetAllData() { confirmAndResetAllData() }
+    @objc private func menuQuit() { NSApp.terminate(nil) }
 
     // MARK: - Hotkey
 
@@ -130,17 +203,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyRegisteredSuccessfully = ok
     }
 
-    // MARK: - Public API (called from MenuBarExtra)
+    // MARK: - Public API (status item, dashboard, hotkey)
 
     func toggleOverlay() {
         overlay.toggle()
     }
 
     func showOverlay() {
+        dashboard.hide()
         overlay.show()
     }
 
     func showOverlayHistory(focusing dropID: UUID? = nil, search: String? = nil) {
+        dashboard.hide()
         overlay.openHistory(focusing: dropID, search: search)
     }
 
@@ -176,6 +251,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         overlay.openHistory()
         results.append(overlay.verifyGlassSetupForTesting())
+        overlay.hide()
+
+        // The dashboard now satisfies the same invariant as the overlay: it is
+        // the same panel + CraneGlassHost path.
+        dashboard.show()
+        results.append(dashboard.verifyGlassSetupForTesting())
+        dashboard.hide()
 
         struct Payload: Encodable {
             let passed: Bool

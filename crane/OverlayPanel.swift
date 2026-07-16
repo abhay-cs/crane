@@ -38,6 +38,9 @@ final class OverlayPanel: NSPanel {
         titlebarAppearsTransparent = true
         isReleasedWhenClosed = false
         becomesKeyOnlyIfNeeded = false
+        // Pinned per-panel so the glass keeps one smoky tint in any system
+        // appearance, without tinting the menu-bar status item.
+        appearance = NSAppearance(named: .darkAqua)
         invalidateShadow()
     }
 

@@ -4,10 +4,12 @@
 //
 //  Created by Abhay Sharma on 2026-05-17.
 //
-//  Menu-bar-only entry. The actual capture UI lives inside the floating
-//  overlay panel that AppDelegate owns; clicking the tray icon opens a
-//  small dashboard window with stats, recent drops, and the New Drop /
-//  Quit actions in its footer.
+//  Menu-bar-only entry. crane owns no SwiftUI windows: the capture overlay,
+//  the onboarding card and the menu-bar dashboard are all AppKit glass panels
+//  held by AppDelegate. That is deliberate — only a window crane owns can be
+//  fully transparent, which is what lets `NSGlassEffectView` sample the desktop
+//  and render real Liquid Glass. A `MenuBarExtra(.window)` keeps its own system
+//  backing under the glass and flattens it into frost.
 //
 
 import SwiftUI
@@ -18,53 +20,19 @@ struct craneApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        MenuBarExtra {
-            DashboardView()
-        } label: {
-            // Wingspan mark (MenuBarIcon.imageset). Template-tinted for the menu bar.
-            Image("MenuBarIcon")
-        }
-        .menuBarExtraStyle(.window)
-        // Single shared container; the overlay panel also installs this
-        // exact instance in `OverlayController.attach(rootView:)` so the
-        // dashboard sees writes made from the capture pill live.
-        .modelContainer(Persistence.container)
-        .commands {
-            CommandGroup(replacing: .newItem) {
-                Button("Write…") {
-                    AppDelegate.shared?.showOverlay()
-                }
-                .keyboardShortcut(" ", modifiers: [.command, .shift])
-            }
-
-            CommandMenu("Capture") {
-                Button("Open History") {
-                    AppDelegate.shared?.showOverlayHistory()
-                }
-                .keyboardShortcut("h", modifiers: [.command, .shift])
-
-                Button("Focus Search") {
-                    AppDelegate.shared?.showOverlayHistory()
-                }
-                .keyboardShortcut("f", modifiers: .command)
-
-                Divider()
-
-                Button("Welcome Tour") {
-                    AppDelegate.shared?.showWelcomeTour()
-                }
-
-                Button("Reset All Data…") {
-                    AppDelegate.shared?.confirmAndResetAllData()
-                }
-            }
-
-            CommandGroup(replacing: .appTermination) {
-                Button("Quit crane") {
-                    NSApp.terminate(nil)
-                }
-                .keyboardShortcut("q", modifiers: .command)
-            }
+        // SwiftUI still requires at least one Scene. `Settings` creates no window
+        // until it is opened, and under `.accessory` activation policy the main
+        // menu is never drawn, so it never can be.
+        //
+        // The shared ModelContainer is installed on the hosting roots instead
+        // (`OverlayController.attach` / `DashboardController.attach`). The old
+        // `.commands` block is gone with the menu bar it lived in: every item was
+        // either already duplicated in-view (⌘⇧Space is the global hotkey, ⌘⇧H and
+        // ⌘F and ⌘Q are shortcuts inside the overlay, Reset is in the dashboard
+        // footer) or, like Welcome Tour, unreachable. Those now live on the status
+        // item's right-click menu.
+        Settings {
+            EmptyView()
         }
     }
 }
